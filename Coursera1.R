@@ -1,28 +1,74 @@
----
-title: "Coursera"
-output: html_document
----
+## ----loaddata------------------------------------------------------------
+unzip(zipfile="activity.zip")
+dataset <- read.csv("activity.csv")
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
-## R Markdown
+## ------------------------------------------------------------------------
+library(ggplot2)
+total.steps <- tapply(dataset$steps, dataset$date, FUN=sum, na.rm=TRUE)
+qplot(total.steps, binwidth=1000, xlab="Total number of steps taken each day")
+mean(total.steps, na.rm=TRUE)
+median(total.steps, na.rm=TRUE)
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+## ------------------------------------------------------------------------
+library(ggplot2)
+averages <- aggregate(x=list(steps=dataset$steps), by=list(interval=dataset$interval),
+                      FUN=mean, na.rm=TRUE)
+ggplot(data=averages, aes(x=interval, y=steps)) +
+    geom_line() +
+    xlab("5-minute interval") +
+    ylab("average number of steps taken")
 
-```{r cars}
-summary(cars)
-```
 
-## Including Plots
+## ------------------------------------------------------------------------
+averages[which.max(averages$steps),]
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
+## ----how_many_missing----------------------------------------------------
+missing <- is.na(dataset$steps)
+# How many missing
+table(missing)
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## ------------------------------------------------------------------------
+# Replace each missing value with the mean value of its 5-minute interval
+fill.value <- function(steps, interval) {
+    filled <- NA
+    if (!is.na(steps))
+        filled <- c(steps)
+    else
+        filled <- (averages[averages$interval==interval, "steps"])
+    return(filled)
+}
+filled.dataset <- dataset
+filled.dataset$steps <- mapply(fill.value, filled.dataset$steps, filled.dataset$interval)
+
+
+## ------------------------------------------------------------------------
+total.steps <- tapply(filled.dataset$steps, filled.dataset$date, FUN=sum)
+qplot(total.steps, binwidth=1000, xlab="Total number of steps taken each day")
+mean(total.steps)
+median(total.steps)
+
+
+## ------------------------------------------------------------------------
+weekday.or.weekend <- function(date) {
+    day <- weekdays(date)
+    if (day %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+        return("weekday")
+    else if (day %in% c("Saturday", "Sunday"))
+        return("weekend")
+    else
+        stop("invalid date")
+}
+filled.dataset$date <- as.Date(filled.dataset$date)
+filled.dataset$day <- sapply(filled.dataset$date, FUN=weekday.or.weekend)
+
+
+## ------------------------------------------------------------------------
+averages <- aggregate(steps ~ interval + day, data=filled.dataset, mean)
+ggplot(averages, aes(interval, steps)) + geom_line() + facet_grid(day ~ .) +
+    xlab("5-minute interval") + ylab("Number of steps")
+
+
